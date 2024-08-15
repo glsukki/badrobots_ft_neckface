@@ -93,9 +93,9 @@
 
 #### Neckface Numerical Prediction Extraction
 
-- Code Structure: `code/`
+- Code Structure: `code/neckface_device_recordings/`
 
-1. `preds_extraction_through_unix_timestamps.ipynb`: This acts very similar to the Neckface Device Recordings Frame Extraction logic. Except, instead of extracting frames from the `{participant_id}_survey.avi` video file, it extracts the datapoints from the `preds` folder.
+1. `numerical_preds_extraction_through_timstamps.py`: This acts very similar to the Neckface Device Recordings Frame Extraction logic. Except, instead of extracting frames from the `{participant_id}_survey.avi` video file, it extracts the datapoints from the `preds` folder containing the `survey_preds.npy`.
 
 
 #### Neckface OpenFace Numerical Features Extraction
