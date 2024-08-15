@@ -7,11 +7,11 @@ from tqdm import tqdm
 
 
 class Neckface:
-    def __init__(self, data_path, output_path):
+    def __init__(self, data_path, output_path, version):
         self.files_to_ignore = [".DS_Store"]
         self.data_path = data_path
         self.output_path = output_path
-        self.preds_path = self.data_path + "pred_outputs/all_participant_preds.csv"
+        self.version = version
         self.neckface_recordings_path = self.data_path + "neckface_device_recordings/format_mp4/"
         self.unix_timestamp_mappings_path = self.data_path + "failureOccurrence_unix_timeStamp_mapping.xlsx"
         self.unix_timestamp_mappings_df = pd.read_excel(self.unix_timestamp_mappings_path)
@@ -24,16 +24,17 @@ class Neckface:
             "fr": 1  # Faulure Robot
         }
         
+        ## NOTE: Not needed anymore as we are excluding participants manually: participant_ids: (13, 17, 27, 29, 30)
         ## Read the participant logs to create datasets for only the participants who are to be considered in the study
-        self.participant_log_path = self.data_path + "participant_log.xlsx"
-        self.participant_log_df = pd.read_excel(self.participant_log_path)
-        ## Drop all the participants who don't have a "id"
-        self.participant_log_df = self.participant_log_df.dropna(subset=["participant_number"])
-        ## Fill in the values for participant inclusion (those who are to be excluded have this value set to "N")
-        self.participant_log_df["participant_neckface"].fillna("Y", inplace=True)
-        ## Create a dict of the participant inclusion information
-        ## key: value :: participant_id: inclusion (Y or N)
-        self.participant_inclusion_dict = {int(key): value for key, value in self.participant_log_df.set_index("participant_number")["participant_neckface"].to_dict().items() if key}
+        # self.participant_log_path = self.data_path + "participant_log.xlsx"
+        # self.participant_log_df = pd.read_excel(self.participant_log_path)
+        # ## Drop all the participants who don't have a "id"
+        # self.participant_log_df = self.participant_log_df.dropna(subset=["participant_number"])
+        # ## Fill in the values for participant inclusion (those who are to be excluded have this value set to "N")
+        # self.participant_log_df["participant_neckface"].fillna("Y", inplace=True)
+        # ## Create a dict of the participant inclusion information
+        # ## key: value :: participant_id: inclusion (Y or N)
+        # self.participant_inclusion_dict = {int(key): value for key, value in self.participant_log_df.set_index("participant_number")["participant_neckface"].to_dict().items() if key}
 
     def get_image_data(self, image, label):
         """Converts the image frame into a numpy array
@@ -82,7 +83,9 @@ class Neckface:
         Returns:
             consider_participant (bool): Y/N regarding participant consideration
         """
-        return self.participant_inclusion_dict.get(participant_id) == "Y"
+        excluded_participants = {13, 17, 27, 29, 30}
+        # return self.participant_inclusion_dict.get(participant_id) == "Y"
+        return participant_id not in excluded_participants
 
     def process_frames(self):
         """
@@ -102,7 +105,7 @@ class Neckface:
         ## Participant session recordings
         participant_recordings = [video for video in os.listdir(self.neckface_recordings_path) if video not in self.files_to_ignore and video.endswith(".mp4")]
         ## Participant unix_timestamps
-        preds_path = self.data_path + "preds/"
+        preds_path = self.data_path + f"preds_{self.version}/"
 
         ## Iterate through the participant session recording
         for recording in tqdm(sorted(participant_recordings), total=len(participant_recordings), desc="Processed Participant:"):
@@ -122,7 +125,10 @@ class Neckface:
             data_pred_df = self.preprocess_data_files(timestamps_path)
             
             ## Obtain the range of timestamp values belonging to a particular participant
-            unix_timestamp_mappings_df = self.unix_timestamp_mappings_df[self.unix_timestamp_mappings_df["participant_id"] == participant_id]
+            unix_timestamp_mappings_df = self.unix_timestamp_mappings_df[self.unix_timestamp_mappings_df["participant_id"] == participant_id].drop_duplicates(
+                subset=["stimulusVideo_name"],
+                keep="first" ## Drop all rows that have the same stimulusVideo_name (when the participant has viewed the stimlus video multiple times) and keep only the first occurrence
+            )
 
             ## Create dirs to store the data for a given participant
             data_pred_output_path = self.output_path + f"{participant_id}/"
@@ -140,6 +146,7 @@ class Neckface:
             neckface_recording_video_name = []
 
             ## Iterate through each of the stimulus video [start, stop] unix timestamps for the participant
+            print(f"Participant: {participant_id}")
             for index, row in unix_timestamp_mappings_df.iterrows():
                 stimulus_video_name = row["stimulusVideo_name"]
                 stimulus_video_class = stimulus_video_name[:2]
@@ -147,12 +154,10 @@ class Neckface:
                     class_label = self.class_mappings[stimulus_video_class]
                 
                 ## If the class is == 1, it is a failure stimulus video, consider frames only upon failure
-                if class_label == 1:
-                    start_time = int(row["failureOccurrence_unixTimestamp"])
-                else:
-                    start_time = row["responseVideo_unixTime_start"]
+                start_column_name = "responseVideo_unixTime_start" if class_label == 0 else "failureOccurrence_unixTimestamp"
+                start_time = int(row[start_column_name])
                 end_time = row["responseVideo_unixTime_end"]
-                
+
                 try:
                     ## Obtain the range of timestamps that are valid and fall within the start and stop time
                     ## The data_pred_df is from the ".npy" file created from the reconstruction video
@@ -204,11 +209,13 @@ class Neckface:
             # break ## From the participant session
 
 def main():
-    data_path = "/Users/sukruthgl/Desktop/Farlabs/NeckFace/2024/data/neckface_dataset/"
-    output_path = data_path + "neckface_device_frame_dataset/"
+    data_path = "../../data/neckface_dataset/"
+    version = "v2"
+    output_path = data_path + f"neckface_device_frame_dataset/{version}/"
     neckface_obj = Neckface(
         data_path=data_path,
-        output_path=output_path
+        output_path=output_path,
+        version=version
     )
     neckface_obj.process_frames()
 

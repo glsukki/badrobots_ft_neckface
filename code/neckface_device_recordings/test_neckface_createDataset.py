@@ -116,7 +116,7 @@ class Neckface:
             json.dump(sorted_participant_timestamps, json_file, indent=4)
         
 if __name__ == "__main__":
-    data_path = "/Users/sukruthgl/Desktop/Farlabs/NeckFace/2024/data/neckface_dataset/"
+    data_path = "../../data/neckface_dataset/"
     output_path = data_path + "neckface_device_frame_dataset/"
     neckface_obj = Neckface(
         data_path=data_path,

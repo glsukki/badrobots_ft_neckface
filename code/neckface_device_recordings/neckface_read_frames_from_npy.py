@@ -11,8 +11,8 @@ def display_frames(participant_numpy_file_path):
     class_label_counts = {}
     frames_count = 0
     
-    for folder in participant_folders:
-        participant_folder_path = participant_numpy_file_path + folder + "/"
+    for participant_folder in participant_folders:
+        participant_folder_path = participant_numpy_file_path + participant_folder + "/"
         
         participant_frame_path = participant_folder_path + "pixel_data.npy"
         participant_label_path = participant_folder_path + "label_data.npy"
@@ -61,16 +61,17 @@ def display_frames(participant_numpy_file_path):
             class_label_counts[label[0]] = class_label_counts.get(label[0], 0) + 1
             # if video_name != "fh1":
             #     continue
-        #     cv2.imshow(f'Frame: {i} | Label: {label} | Participant: {first_participant_data} | {video_name}', frame)
-        #     cv2.waitKey(1)
-        #     cv2.destroyWindow(f'Frame: {i} | Label: {label} | Participant: {first_participant_data} | {video_name}')
-        # cv2.destroyAllWindows()
-        # break
+            cv2.imshow(f'Frame: {i} | Label: {label} | Participant: {first_participant_data} | {video_name}', frame)
+            cv2.waitKey(1)
+            cv2.destroyWindow(f'Frame: {i} | Label: {label} | Participant: {first_participant_data} | {video_name}')
+        cv2.destroyAllWindows()
+        break # from participant
     print(f"Class Label Count: {class_label_counts}")
     print(f"Total number of frames = {frames_count}")
 
 def main():
-    data_path = "data/neckface_dataset/neckface_device_frame_dataset/"
+    version = "v2"
+    data_path = f"../../data/neckface_dataset/neckface_device_frame_dataset/{version}/"
     display_frames(data_path)
 
 

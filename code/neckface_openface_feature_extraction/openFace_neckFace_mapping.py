@@ -1,3 +1,8 @@
+## This script reads in the OpenFace extracted facial features dataset (csvs) and performs a 1:1 mapping on the NeckFace device timestamps
+## consider_datapoint = openface_timestamp == neckface_timestamp
+## If the exact timestamp is not found (i.e: openface_timestamp == neckface_timestamp), we consider the next closest timestamp to the neckface_timestamp
+## We set a error threshold to check how many datapoints cross the threshold when matched to the next closest timestamp.
+
 import os
 import math
 import shutil
@@ -60,16 +65,19 @@ def merge_all_participant_openface_features(openface_features_dataset_path, part
     all_participants_df = pd.DataFrame()
     participants = [participant for participant in os.listdir(openface_features_dataset_path) if participant not in files_to_ignore]
 
-    participant_id_to_qualtrics_id = get_participant_id_mappings(
+    qualtrics_to_participant_id = get_participant_id_mappings(
         participant_log_path = participant_log_path
     )
+    # participant_id_to_qualtrics_id = {value: key for key, value in participant_id_to_qualtrics_id.items()}
+
     start_stop_unix_timestamps = get_participant_start_stop_unix_timestamps(participant_recording_timestamp_info_path)
     target_labels = {
         "c": 0, ## Control
         "f": 1 ## Failure
     }
 
-    qualtrics_to_participant_id = {value: key for key, value in participant_id_to_qualtrics_id.items()}
+    
+
     final_features, required_features = get_features()
     for participant_qualtrics_id in tqdm(sorted(participants), total=len(participants), desc="Merging openface features: "):
         participant_id = qualtrics_to_participant_id[int(participant_qualtrics_id)]
@@ -125,7 +133,10 @@ def get_participant_start_stop_unix_timestamps(participant_recording_timestamp_i
     participant_ids = start_stop_df["participant_id"].unique()
     start_stop_timestamps = {}
     for participant_id in participant_ids:
-        participant_info = start_stop_df[start_stop_df["participant_id"] == participant_id]
+        participant_info = start_stop_df[start_stop_df["participant_id"] == participant_id].drop_duplicates(
+            subset=["stimulusVideo_name"],
+            keep="first" ## Drop all rows that have the same stimulusVideo_name (when the participant has viewed the stimlus video multiple times) and keep only the first occurrence
+        )
         timestamps = {}
         for index, row in participant_info.iterrows():
             qualtrics_id = row["qualtrics_participant_id"]
@@ -210,7 +221,9 @@ def perform_openface_to_neckface_data_mapping(
         os.mkdir(output_path)
 
     qualtrics_id_to_participant_id = get_participant_id_mappings(participant_log_path)
-    participants_to_consider = [int(participant) for participant in os.listdir(openface_features_dataset_path) if participant not in files_to_ignore and int(participant) in qualtrics_id_to_participant_id]
+    ## Participants Excluded 
+    participants_to_exclude = {13, 17, 27, 29, 30}
+    participants_to_consider = [int(participant) for participant in os.listdir(openface_features_dataset_path) if (participant not in files_to_ignore) and (qualtrics_id_to_participant_id[int(participant)] not in participants_to_exclude)]
 
     all_participants_openface_neckface_mappings = []
     for participant_qualtrics_id in tqdm(sorted(participants_to_consider), total=len(participants_to_consider), desc="Matching participant dataset: "):
@@ -222,8 +235,11 @@ def perform_openface_to_neckface_data_mapping(
             neckface_data_path=neckface_features_dataset_path,
             participant_id=qualtrics_id_to_participant_id[participant_qualtrics_id]
         )
-        if qualtrics_id_to_participant_id[participant_qualtrics_id] not in [23, 24]:
-            continue
+        # print(openface_features_df.head(5))
+        # print(neckface_preds_df.head(5))
+        # break
+        # if qualtrics_id_to_participant_id[participant_qualtrics_id] not in [5]:
+        #     continue
         stimulus_videos = openface_features_df["response_video"].unique()
         closest_greatest_rows = []
         absolute_differences = []
@@ -232,6 +248,9 @@ def perform_openface_to_neckface_data_mapping(
             nf_video_df = neckface_preds_df[neckface_preds_df["stimulus_video_name"] == video]
             of_video_df = openface_features_df[openface_features_df["response_video"] == video]
             
+            # ## The unix timestamp columns are in milliseconds, here we convert them to seconds
+            # nf_video_df["corrected_timestamps"] = nf_video_df["corrected_timestamps"].apply(lambda timestamp: timestamp / 1000)
+            # of_video_df["unixTimestamp"] = of_video_df["unixTimestamp"].apply(lambda timestamp: timestamp / 1000)
             for neckface_ts in nf_video_df["corrected_timestamps"]:
                 # Find the openface timestamps that is >= neckface timestamp
                 greater_or_equal_ts = of_video_df[of_video_df["unixTimestamp"] >= neckface_ts]
@@ -264,10 +283,11 @@ def perform_openface_to_neckface_data_mapping(
     all_participants_openface_neckface_mappings_df.to_csv(output_path + "all_participants_openface_to_neckface_matched_dataset.csv", index=False)
 
 def main():
+    version = "v2"
     data_path = "../../data/"
     participant_log_path = data_path + "neckface_dataset/participant_log.xlsx"
     participant_recording_timestamp_info_path = data_path + "neckface_dataset/failureOccurrence_unix_timeStamp_mapping.xlsx"
-    neckface_extracted_timestamps = data_path + "neckface_dataset/pred_outputs/all_participant_preds.csv"
+    neckface_extracted_timestamps = data_path + f"neckface_dataset/pred_outputs_{version}/all_participant_preds.csv"
     openface_features_dataset_path = data_path + "neckface_openface_dataset/openface_numerical_features_dataset/"
 
     ## Iterate through all the openface datasets and merge them based on the participants and also by all participants
@@ -279,12 +299,6 @@ def main():
     #     participant_recording_timestamp_info_path=participant_recording_timestamp_info_path,
     #     participant_log_path=participant_log_path
     # )
-    
-    ## Obtains the start and stop unix_timestamps of each participant for each stimulus_video
-    # start_stop_unix_timestamps = get_participant_start_stop_unix_timestamps(
-    #     participant_recording_timestamp_info_path=participant_recording_timestamp_info_path
-    # )
-    # pprint(start_stop_unix_timestamps)
 
     ## Map the OpenFace data based on the timestamps in NeckFace data
     ## Calculate the error in matches based on the error_threshold (here, pass in seconds - later in the method, it is converted into unix milliseconds)
