@@ -70,8 +70,12 @@ def display_frames(participant_numpy_file_path):
     print(f"Total number of frames = {frames_count}")
 
 def main():
-    version = "v2"
-    data_path = f"../../data/neckface_dataset/neckface_device_frame_dataset/{version}/"
+    ## For Neckface IR recording dataset
+    # version = "v2"
+    # data_path = f"../../data/neckface_dataset/neckface_device_frame_dataset/{version}/" 
+    
+    ## For Neckface Survey recording dataset
+    data_path = f"../../data/neckface_survey_dataset/"
     display_frames(data_path)
 
 
